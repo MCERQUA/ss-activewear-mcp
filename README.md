@@ -81,6 +81,14 @@ To get your S&S Activewear API key:
 
 3. Restart Claude Desktop
 
+## Authentication
+
+The S&S Activewear API uses HTTP Basic Authentication:
+- **Username**: Your Account Number
+- **Password**: Your API Key
+
+The MCP server handles this authentication automatically using the credentials you provide in the configuration.
+
 ## Canadian Configuration & Multi-Region Setup
 
 ### Important Notes for Canadian Users
@@ -185,6 +193,12 @@ Export product catalog data.
 
 The server automatically uses the correct endpoint based on your `SS_REGION` setting.
 
+### Main Endpoints Used:
+- `Products.aspx` - Product search and details
+- `Inventory.aspx` - Real-time inventory
+- `Categories.aspx` - Product categories
+- `Orders_Post.aspx` - Order submission
+
 ## Development
 
 ### Running locally
@@ -201,10 +215,11 @@ npm test
 
 ## Troubleshooting
 
-### Authentication errors
+### Authentication errors (401)
 - Verify your account number and API key are correct
 - Ensure you're using the correct region (US vs CA)
 - Check that your API access is active
+- The API uses HTTP Basic Authentication - Username is your Account Number, Password is your API Key
 - For Canadian accounts, make sure you're using the Canadian API key from `api-ca@ssactivewear.com`
 - Enable debug mode by setting `DEBUG=true` in your environment variables to see detailed error messages
 
