@@ -16,14 +16,14 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 dotenv.config({ path: join(__dirname, "..", ".env") });
 
-// S&S Activewear API configuration - Using Canadian endpoint as primary
+// S&S Activewear CANADA API configuration - CANADA ONLY
 const SS_API_BASE_URL = "https://api-ca.ssactivewear.com/v2";
 
-class SSActivewearServer {
+class SSActivewearCanadaServer {
   constructor() {
     this.server = new Server(
       {
-        name: "ss-activewear",
+        name: "ss-activewear-canada",
         version: "1.0.0",
       },
       {
@@ -47,11 +47,11 @@ class SSActivewearServer {
     }
     
     // Log configuration (without exposing sensitive data)
-    console.error("S&S Activewear MCP Configuration:");
+    console.error("S&S Activewear CANADA MCP Configuration:");
     console.error(`- Account Number: ${process.env.SS_ACCOUNT_NUMBER ? "✓ Set" : "✗ Missing"}`);
     console.error(`- API Key: ${process.env.SS_API_KEY ? "✓ Set" : "✗ Missing"}`);
     console.error(`- Debug: ${process.env.DEBUG === "true" ? "Enabled" : "Disabled"}`);
-    console.error(`- API Base URL: ${SS_API_BASE_URL}`);
+    console.error(`- API Base URL: ${SS_API_BASE_URL} (CANADA ONLY)`);
   }
 
   setupHandlers() {
@@ -60,7 +60,7 @@ class SSActivewearServer {
       tools: [
         {
           name: "search_products",
-          description: "Search S&S Activewear products by keyword, style, brand, or category",
+          description: "Search S&S Activewear Canada products by keyword, style, brand, or category",
           inputSchema: {
             type: "object",
             properties: {
@@ -87,7 +87,7 @@ class SSActivewearServer {
         },
         {
           name: "get_product_details",
-          description: "Get detailed information about a specific product including inventory",
+          description: "Get detailed information about a specific product including inventory (Canada)",
           inputSchema: {
             type: "object",
             properties: {
@@ -101,7 +101,7 @@ class SSActivewearServer {
         },
         {
           name: "check_inventory",
-          description: "Check real-time inventory for specific products",
+          description: "Check real-time inventory for specific products (Canadian warehouses: BC, ON)",
           inputSchema: {
             type: "object",
             properties: {
@@ -112,7 +112,7 @@ class SSActivewearServer {
               },
               warehouse: {
                 type: "string",
-                description: "Specific warehouse code (optional)",
+                description: "Specific Canadian warehouse code (optional): BC, ON",
               },
             },
             required: ["styleIds"],
@@ -120,7 +120,7 @@ class SSActivewearServer {
         },
         {
           name: "get_pricing",
-          description: "Get pricing information for products",
+          description: "Get pricing information for products (Canadian pricing)",
           inputSchema: {
             type: "object",
             properties: {
@@ -140,7 +140,7 @@ class SSActivewearServer {
         },
         {
           name: "download_product_data",
-          description: "Download product catalog data in CSV format",
+          description: "Download Canadian product catalog data in CSV format",
           inputSchema: {
             type: "object",
             properties: {
@@ -152,7 +152,7 @@ class SSActivewearServer {
               },
               includeInventory: {
                 type: "boolean",
-                description: "Include real-time inventory data",
+                description: "Include real-time inventory data from Canadian warehouses",
                 default: true,
               },
             },
@@ -193,16 +193,16 @@ class SSActivewearServer {
     });
   }
 
-  // Helper function to make authenticated API calls
+  // Helper function to make authenticated API calls to S&S Canada
   async makeApiCall(endpoint, params = {}) {
     const accountNumber = process.env.SS_ACCOUNT_NUMBER;
     const apiKey = process.env.SS_API_KEY;
 
     if (!accountNumber || !apiKey) {
-      throw new Error("S&S Activewear credentials not configured. Please check your .env file.");
+      throw new Error("S&S Activewear Canada credentials not configured. Please check your .env file.");
     }
 
-    // Construct the full URL with endpoint - ensure no double slashes
+    // Construct the full URL - CANADA API ONLY
     const fullUrl = `${SS_API_BASE_URL}/${endpoint.replace(/^\//, "")}`;
     
     // CRITICAL: Always add mediatype=json to get JSON responses instead of HTML
@@ -215,9 +215,9 @@ class SSActivewearServer {
     const authString = Buffer.from(`${accountNumber}:${apiKey}`).toString('base64');
     
     if (process.env.DEBUG === "true") {
-      console.error(`Making API call to: ${fullUrl}`);
-      console.error(`Query params: ${JSON.stringify(queryParams)}`);
-      console.error(`Using Basic Auth with account: ${accountNumber}`);
+      console.error(`[S&S CANADA] Making API call to: ${fullUrl}`);
+      console.error(`[S&S CANADA] Query params: ${JSON.stringify(queryParams)}`);
+      console.error(`[S&S CANADA] Using Basic Auth with account: ${accountNumber}`);
     }
 
     try {
@@ -229,26 +229,26 @@ class SSActivewearServer {
           "Authorization": `Basic ${authString}`,
           "Accept": "application/json",
           "Content-Type": "application/json",
-          "User-Agent": "SS-Activewear-MCP/1.0",
+          "User-Agent": "SS-Activewear-Canada-MCP/1.0",
         },
         timeout: 30000, // 30 second timeout
       });
 
       if (process.env.DEBUG === "true") {
-        console.error(`Response status: ${response.status}`);
-        console.error(`Response type: ${typeof response.data}`);
-        console.error(`Response content type: ${response.headers['content-type']}`);
+        console.error(`[S&S CANADA] Response status: ${response.status}`);
+        console.error(`[S&S CANADA] Response type: ${typeof response.data}`);
+        console.error(`[S&S CANADA] Response content type: ${response.headers['content-type']}`);
       }
 
       // Check if we got HTML instead of JSON (common issue)
       if (typeof response.data === 'string' && response.data.includes('<html>')) {
-        throw new Error("Received HTML response instead of JSON. Check API endpoint and mediatype parameter.");
+        throw new Error("Received HTML response instead of JSON from S&S Canada API. Check API endpoint and mediatype parameter.");
       }
 
       return response.data;
     } catch (error) {
       if (process.env.DEBUG === "true") {
-        console.error("API Error Details:");
+        console.error("[S&S CANADA] API Error Details:");
         if (error.response) {
           console.error(`Status: ${error.response.status}`);
           console.error(`Status Text: ${error.response.statusText}`);
@@ -260,21 +260,21 @@ class SSActivewearServer {
       }
       
       if (error.response) {
-        // Handle specific error responses
+        // Handle specific error responses from S&S Canada API
         if (error.response.status === 404) {
-          throw new Error("Product not found or discontinued.");
+          throw new Error("Product not found or discontinued in S&S Canada catalog.");
         } else if (error.response.status === 401) {
-          throw new Error("Authentication failed. Check your account number and API key.");
+          throw new Error("Authentication failed with S&S Canada API. Check your account number and API key.");
         } else if (error.response.status === 403) {
-          throw new Error("Access denied. Check your API permissions.");
+          throw new Error("Access denied to S&S Canada API. Check your API permissions.");
         } else {
           const errorMessage = error.response.data?.errors?.[0]?.message 
             || error.response.data?.message 
             || error.response.statusText;
-          throw new Error(`S&S API Error: ${error.response.status} - ${errorMessage}`);
+          throw new Error(`S&S Canada API Error: ${error.response.status} - ${errorMessage}`);
         }
       } else if (error.request) {
-        throw new Error("No response from S&S API. Please check your internet connection.");
+        throw new Error("No response from S&S Canada API. Please check your internet connection.");
       } else {
         throw error;
       }
@@ -283,7 +283,7 @@ class SSActivewearServer {
 
   async searchProducts({ query, category, brand, limit = 20 }) {
     try {
-      // Use the correct API endpoint: /v2/products/?style={query}
+      // Use the S&S Canada API endpoint: /v2/products/?style={query}
       const params = {};
       
       if (query) {
@@ -317,6 +317,7 @@ class SSActivewearServer {
           {
             type: "text",
             text: JSON.stringify({
+              source: "S&S Activewear Canada",
               totalResults: filteredData.length,
               query: query,
               brand: brand || null,
@@ -327,13 +328,13 @@ class SSActivewearServer {
         ],
       };
     } catch (error) {
-      throw new Error(`Failed to search products: ${error.message}`);
+      throw new Error(`Failed to search S&S Canada products: ${error.message}`);
     }
   }
 
   async getProductDetails({ styleId }) {
     try {
-      // Use the correct API endpoint: /v2/products/{styleId}
+      // Use the S&S Canada API endpoint: /v2/products/{styleId}
       const endpoint = `products/${styleId}`;
       
       const data = await this.makeApiCall(endpoint);
@@ -342,23 +343,32 @@ class SSActivewearServer {
         content: [
           {
             type: "text",
-            text: JSON.stringify(data || { error: "Product not found" }, null, 2),
+            text: JSON.stringify({
+              source: "S&S Activewear Canada",
+              productDetails: data || { error: "Product not found in Canada catalog" }
+            }, null, 2),
           },
         ],
       };
     } catch (error) {
-      throw new Error(`Failed to get product details: ${error.message}`);
+      throw new Error(`Failed to get product details from S&S Canada: ${error.message}`);
     }
   }
 
   async checkInventory({ styleIds, warehouse }) {
     try {
-      // Use the correct API endpoint: /v2/inventory/{styleIds}
+      // Use the S&S Canada API endpoint: /v2/inventory/{styleIds}
       const endpoint = `inventory/${styleIds.join(",")}`;
       const params = {};
       
+      // Only allow Canadian warehouse codes
       if (warehouse) {
-        params.Warehouses = warehouse;
+        const canadianWarehouses = ['BC', 'ON'];
+        if (canadianWarehouses.includes(warehouse.toUpperCase())) {
+          params.Warehouses = warehouse.toUpperCase();
+        } else {
+          throw new Error(`Invalid warehouse code. Canadian warehouses only: BC, ON`);
+        }
       }
 
       const data = await this.makeApiCall(endpoint, params);
@@ -367,18 +377,22 @@ class SSActivewearServer {
         content: [
           {
             type: "text",
-            text: JSON.stringify(data, null, 2),
+            text: JSON.stringify({
+              source: "S&S Activewear Canada",
+              warehouse: warehouse || "All Canadian warehouses",
+              inventoryData: data
+            }, null, 2),
           },
         ],
       };
     } catch (error) {
-      throw new Error(`Failed to check inventory: ${error.message}`);
+      throw new Error(`Failed to check inventory at S&S Canada: ${error.message}`);
     }
   }
 
   async getPricing({ styleIds, quantity = 1 }) {
     try {
-      // Use the products endpoint with specific fields for pricing
+      // Use the S&S Canada products endpoint with specific fields for pricing
       const endpoint = `products/${styleIds.join(",")}`;
       const params = {
         fields: "sku,brandName,styleName,mapPrice,piecePrice,dozenPrice,casePrice,customerPrice"
@@ -397,13 +411,16 @@ class SSActivewearServer {
         casePrice: product.casePrice,
         customerPrice: product.customerPrice,
         quantity: quantity,
-      })) : (data ? [data] : []);
+        currency: "CAD"
+      })) : (data ? [{ ...data, quantity: quantity, currency: "CAD" }] : []);
       
       return {
         content: [
           {
             type: "text",
             text: JSON.stringify({
+              source: "S&S Activewear Canada",
+              currency: "CAD",
               requestedQuantity: quantity,
               pricingData: pricingData
             }, null, 2),
@@ -411,13 +428,13 @@ class SSActivewearServer {
         ],
       };
     } catch (error) {
-      throw new Error(`Failed to get pricing: ${error.message}`);
+      throw new Error(`Failed to get pricing from S&S Canada: ${error.message}`);
     }
   }
 
   async downloadProductData({ format = "csv", includeInventory = true }) {
     try {
-      // For product data export, get all products from the correct endpoint
+      // Get all products from S&S Canada catalog
       const endpoint = "products/";
       const params = {};
       
@@ -445,33 +462,39 @@ class SSActivewearServer {
         content: [
           {
             type: "text",
-            text: typeof data === "string" ? data : JSON.stringify(data, null, 2),
+            text: JSON.stringify({
+              source: "S&S Activewear Canada",
+              format: format,
+              includeInventory: includeInventory,
+              data: typeof data === "string" ? data : data
+            }, null, 2),
           },
         ],
       };
     } catch (error) {
-      throw new Error(`Failed to download product data: ${error.message}`);
+      throw new Error(`Failed to download product data from S&S Canada: ${error.message}`);
     }
   }
   
   // Helper function to convert JSON to CSV
   convertToCSV(data) {
     if (!Array.isArray(data) || data.length === 0) {
-      return "No data available";
+      return "No data available from S&S Canada catalog";
     }
     
-    // Flatten nested objects for CSV export
+    // Flatten nested objects for CSV export - Canadian warehouse focus
     const flattenedData = data.map(item => {
       const flattened = {};
       
       Object.keys(item).forEach(key => {
         if (Array.isArray(item[key])) {
-          // Handle arrays (like warehouses) by joining or creating separate columns
+          // Handle arrays (like warehouses) - focus on Canadian warehouses
           if (key === 'warehouses' && item[key].length > 0) {
-            const warehouse = item[key][0]; // Take first warehouse for main columns
-            flattened[`${key}_qty`] = warehouse.qty || 0;
-            flattened[`${key}_warehouse`] = warehouse.warehouseAbbr || '';
-            flattened[`${key}_closeout`] = warehouse.closeout || false;
+            // Find Canadian warehouses first (BC, ON)
+            const canadianWarehouse = item[key].find(w => ['BC', 'ON'].includes(w.warehouseAbbr)) || item[key][0];
+            flattened[`${key}_qty`] = canadianWarehouse.qty || 0;
+            flattened[`${key}_warehouse`] = canadianWarehouse.warehouseAbbr || '';
+            flattened[`${key}_closeout`] = canadianWarehouse.closeout || false;
           } else {
             flattened[key] = JSON.stringify(item[key]);
           }
@@ -508,12 +531,12 @@ class SSActivewearServer {
   async run() {
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
-    console.error("S&S Activewear MCP server is running");
+    console.error("S&S Activewear CANADA MCP server is running");
   }
 }
 
-// Initialize and run the server
-const server = new SSActivewearServer();
+// Initialize and run the CANADA-only server
+const server = new SSActivewearCanadaServer();
 server.run().catch((error) => {
   console.error("Fatal error:", error);
   process.exit(1);
