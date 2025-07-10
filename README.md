@@ -2,6 +2,16 @@
 
 An MCP (Model Context Protocol) server that provides integration with S&S Activewear's API, enabling AI assistants like Claude to interact with S&S Activewear's wholesale apparel catalog.
 
+## 🚀 Recent Updates (Fix Branch)
+
+**Critical API Implementation Fixes:**
+- ✅ Fixed base URL to use Canadian endpoint consistently (`https://api-ca.ssactivewear.com/v2`)
+- ✅ Implemented correct endpoint patterns from API documentation
+- ✅ Added required `mediatype=json` parameter to all requests
+- ✅ Improved error handling with specific status code responses
+- ✅ Fixed authentication using proper HTTP Basic Auth
+- ✅ Enhanced debugging capabilities with detailed request/response logging
+
 ## Features
 
 - 🔍 **Product Search** - Search products by keyword, style, brand, or category
@@ -48,17 +58,14 @@ To get your S&S Activewear API key:
    ```env
    SS_ACCOUNT_NUMBER=your_account_number
    SS_API_KEY=your_api_key
-   SS_REGION=US  # or CA for Canada
    DEBUG=false   # set to true for debugging
    ```
 
 ## Usage with Claude Desktop
 
-### Single Region Setup
-
 1. Open your Claude Desktop configuration file:
    - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
-   - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+   - Windows: `%APPDATA%\\Claude\\claude_desktop_config.json`
    - Linux: `~/.config/Claude/claude_desktop_config.json`
 
 2. Add the S&S Activewear MCP server configuration:
@@ -71,8 +78,7 @@ To get your S&S Activewear API key:
          "args": ["/absolute/path/to/ss-activewear-mcp/src/index.js"],
          "env": {
            "SS_ACCOUNT_NUMBER": "your_account_number",
-           "SS_API_KEY": "your_api_key",
-           "SS_REGION": "US"
+           "SS_API_KEY": "your_api_key"
          }
        }
      }
@@ -89,57 +95,13 @@ The S&S Activewear API uses HTTP Basic Authentication:
 
 The MCP server handles this authentication automatically using the credentials you provide in the configuration.
 
-## Canadian Configuration & Multi-Region Setup
-
-### Important Notes for Canadian Users
-
-- S&S Activewear maintains separate systems for US and Canadian operations
-- You need separate account numbers and API keys for each region
-- Canadian API endpoint: `https://api-ca.ssactivewear.com/V2`
-- To get a Canadian API key, email: `api-ca@ssactivewear.com`
-
-### Setting Up Both US and Canadian Regions
-
-If you operate in both the US and Canada, you can set up two instances of the MCP server in your Claude Desktop configuration. Each instance will use the same codebase but with different credentials and regions.
-
-```json
-{
-  "mcpServers": {
-    "ss-activewear-us": {
-      "command": "node",
-      "args": ["/absolute/path/to/ss-activewear-mcp/src/index.js"],
-      "env": {
-        "SS_ACCOUNT_NUMBER": "your_us_account_number",
-        "SS_API_KEY": "your_us_api_key",
-        "SS_REGION": "US"
-      }
-    },
-    "ss-activewear-ca": {
-      "command": "node",
-      "args": ["/absolute/path/to/ss-activewear-mcp/src/index.js"],
-      "env": {
-        "SS_ACCOUNT_NUMBER": "your_canada_account_number",
-        "SS_API_KEY": "your_canada_api_key",
-        "SS_REGION": "CA"
-      }
-    }
-  }
-}
-```
-
-With this setup:
-- Both regions will be available in Claude simultaneously
-- You can search US inventory by prefixing with "using ss-activewear-us"
-- You can search Canadian inventory by prefixing with "using ss-activewear-ca"
-- The same codebase handles both regions automatically based on the `SS_REGION` setting
-
 ## Available Tools
 
 ### search_products
 Search for products in the S&S Activewear catalog.
 
 **Parameters:**
-- `query` (required): Search keywords
+- `query` (required): Search keywords (searches style names, brands, etc.)
 - `category` (optional): Filter by category
 - `brand` (optional): Filter by brand
 - `limit` (optional): Maximum results (default: 20)
@@ -153,30 +115,30 @@ Search for "gildan t-shirts" in the S&S catalog
 Get detailed information about a specific product.
 
 **Parameters:**
-- `styleId` (required): The product style ID
+- `styleId` (required): The product identifier (SKU, GTIN, StyleID, etc.)
 
 **Example:**
 ```
-Get details for style G500
+Get details for style B00760004
 ```
 
 ### check_inventory
 Check real-time inventory levels.
 
 **Parameters:**
-- `styleIds` (required): Array of style IDs
-- `warehouse` (optional): Specific warehouse code
+- `styleIds` (required): Array of product identifiers
+- `warehouse` (optional): Specific warehouse code (IL, NV, NJ, KS, BC, ON)
 
 **Example:**
 ```
-Check inventory for styles G500 and G800
+Check inventory for styles B00760004 and G500
 ```
 
 ### get_pricing
 Get pricing information including volume discounts.
 
 **Parameters:**
-- `styleIds` (required): Array of style IDs
+- `styleIds` (required): Array of product identifiers
 - `quantity` (optional): Quantity for volume pricing
 
 ### download_product_data
@@ -186,18 +148,30 @@ Export product catalog data.
 - `format` (optional): csv, xml, or json (default: csv)
 - `includeInventory` (optional): Include inventory data (default: true)
 
-## API Endpoints
+## API Implementation Details
 
-- **US API**: `https://api.ssactivewear.com/V2`
-- **Canadian API**: `https://api-ca.ssactivewear.com/V2`
+### Base URL
+- **Primary API**: `https://api-ca.ssactivewear.com/v2` (Canadian endpoint - more reliable)
 
-The server automatically uses the correct endpoint based on your `SS_REGION` setting.
+### Key Endpoints Used
+- `/v2/products/` - Product search and details
+- `/v2/products/{identifier}` - Specific product lookup
+- `/v2/inventory/{identifiers}` - Real-time inventory
+- `/v2/products/?style={query}` - Style-based search
 
-### Main Endpoints Used:
-- `Products.aspx` - Product search and details
-- `Inventory.aspx` - Real-time inventory
-- `Categories.aspx` - Product categories
-- `Orders_Post.aspx` - Order submission
+### Supported Product Identifiers
+- **SkuID** - Unique numeric ID (e.g., 81480)
+- **Sku** - Alphanumeric SKU (e.g., B00760004)
+- **Gtin** - Industry standard identifier (e.g., 00821780008137)
+- **StyleID** - Numeric style ID (e.g., 39)
+
+### Warehouse Codes
+- **IL** - Illinois
+- **NV** - Nevada  
+- **NJ** - New Jersey
+- **KS** - Kansas
+- **BC** - British Columbia (Canada)
+- **ON** - Ontario (Canada)
 
 ## Development
 
@@ -213,19 +187,9 @@ npm start
 npm test
 ```
 
-## Troubleshooting
-
-### Authentication errors (401)
-- Verify your account number and API key are correct
-- Ensure you're using the correct region (US vs CA)
-- Check that your API access is active
-- The API uses HTTP Basic Authentication - Username is your Account Number, Password is your API Key
-- For Canadian accounts, make sure you're using the Canadian API key from `api-ca@ssactivewear.com`
-- Enable debug mode by setting `DEBUG=true` in your environment variables to see detailed error messages
-
 ### Debugging
 
-To enable debug mode and see detailed API calls and responses:
+Enable detailed API debugging:
 
 ```json
 {
@@ -236,7 +200,6 @@ To enable debug mode and see detailed API calls and responses:
       "env": {
         "SS_ACCOUNT_NUMBER": "your_account_number",
         "SS_API_KEY": "your_api_key",
-        "SS_REGION": "CA",
         "DEBUG": "true"
       }
     }
@@ -244,15 +207,64 @@ To enable debug mode and see detailed API calls and responses:
 }
 ```
 
+With debug mode enabled, you'll see:
+- Full API request URLs and parameters
+- Request/response headers
+- Response status codes and data types
+- Detailed error information
+
+## Troubleshooting
+
+### Authentication errors (401)
+- Verify your account number and API key are correct
+- Check that your API access is active with S&S Activewear
+- Ensure you're using the Account Number as username and API Key as password
+
+### Product not found (404)
+- Verify the product identifier is correct
+- Check if the product has been discontinued
+- Try searching with different identifier types (SKU vs StyleID)
+
+### HTML response instead of JSON
+This was a common issue that has been fixed in this version:
+- All requests now include `mediatype=json` parameter
+- Proper Accept headers are set
+- Error is thrown if HTML response is detected
+
 ### No results found
 - Try broader search terms
 - Verify the product style IDs are correct
-- Check if you're searching in the correct region's catalog
-- Note that product availability may differ between US and Canadian catalogs
+- Use specific identifiers like SKUs for exact matches
+
+### Connection timeouts
+- Check your internet connection
+- API requests have a 30-second timeout
+- S&S servers may occasionally be slow during peak hours
+
+### Debug Mode Error Analysis
+
+When `DEBUG=true`, look for these common issues in the logs:
+
+1. **URL Construction**: Check that URLs don't have double slashes
+2. **Authentication**: Verify the Basic Auth header is properly formatted
+3. **Response Type**: Ensure responses are JSON, not HTML
+4. **Status Codes**: 
+   - 401: Authentication problem
+   - 403: Access denied
+   - 404: Resource not found
+   - 500: Server error
 
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
+
+### Key Implementation Notes for Contributors
+
+1. **Always include `mediatype=json`** in query parameters
+2. **Use Canadian API endpoint** as primary (more stable)
+3. **Handle multiple identifier types** (SKU, GTIN, StyleID)
+4. **Implement proper error handling** for different HTTP status codes
+5. **Support warehouse filtering** for inventory queries
 
 ## License
 
@@ -269,3 +281,4 @@ For issues with:
 
 - Built for use with [Anthropic's MCP](https://github.com/anthropics/mcp)
 - Integrates with [S&S Activewear's API](https://api.ssactivewear.com)
+- Implementation based on detailed API analysis and testing
