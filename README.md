@@ -1,242 +1,49 @@
-# S&S Activewear MCP Server
+# S&S Activewear Canada MCP Server 🇨🇦
 
-An MCP (Model Context Protocol) server that provides integration with S&S Activewear's API, enabling AI assistants like Claude to interact with S&S Activewear's wholesale apparel catalog.
+Model Context Protocol (MCP) server for integrating with S&S Activewear Canada's API. This implementation is **CANADA ONLY** and connects exclusively to the Canadian S&S Activewear catalog and warehouses.
 
 ## Features
 
-- 🔍 **Product Search** - Search products by keyword, style, brand, or category
-- 📦 **Inventory Check** - Real-time inventory availability across warehouses
-- 💰 **Pricing Information** - Get pricing including volume discounts
-- 📊 **Product Details** - Detailed product information including colors, sizes, and specifications
-- 📥 **Data Export** - Download product catalogs in various formats
+- 🇨🇦 **Canada Only**: Connects exclusively to S&S Activewear Canada (api-ca.ssactivewear.com)
+- 🔍 **Product Search**: Search Canadian catalog by keywords, brands, and styles
+- 📋 **Product Details**: Get detailed information for specific Canadian products
+- 📦 **Inventory Check**: Real-time inventory from Canadian warehouses (BC, ON)
+- 💰 **Pricing**: Get Canadian pricing (CAD) with volume discounts
+- 📊 **Data Export**: Export Canadian catalog data in CSV/JSON formats
 
 ## Installation
 
-### Prerequisites
-
-- Node.js 18 or higher
-- An S&S Activewear account with API access
-- Your API credentials (Account Number and API Key)
-
-### Getting your API Key
-
-To get your S&S Activewear API key:
-
-1. Email `api@ssactivewear.com` (US) or `api-ca@ssactivewear.com` (Canada)
-2. Include your account number in the request
-3. They typically respond within one business day
-
-### Setup
-
 1. Clone this repository:
-   ```bash
-   git clone https://github.com/MCERQUA/ss-activewear-mcp.git
-   cd ss-activewear-mcp
-   ```
+```bash
+git clone https://github.com/MCERQUA/ss-activewear-mcp.git
+cd ss-activewear-mcp
+```
 
 2. Install dependencies:
-   ```bash
-   npm install
-   ```
+```bash
+npm install
+```
 
-3. Create a `.env` file with your credentials:
-   ```bash
-   cp .env.example .env
-   ```
+3. Create a `.env` file with your S&S Activewear Canada credentials:
+```env
+SS_ACCOUNT_NUMBER=your_account_number
+SS_API_KEY=your_api_key
+DEBUG=false
+```
 
-4. Edit `.env` and add your credentials:
-   ```env
-   SS_ACCOUNT_NUMBER=your_account_number
-   SS_API_KEY=your_api_key
-   SS_REGION=US  # or CA for Canada
-   DEBUG=false   # set to true for debugging
-   ```
+## Configuration
 
-## Usage with Claude Desktop
-
-### Single Region Setup
-
-1. Open your Claude Desktop configuration file:
-   - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
-   - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
-   - Linux: `~/.config/Claude/claude_desktop_config.json`
-
-2. Add the S&S Activewear MCP server configuration:
-
-   ```json
-   {
-     "mcpServers": {
-       "ss-activewear": {
-         "command": "node",
-         "args": ["/absolute/path/to/ss-activewear-mcp/src/index.js"],
-         "env": {
-           "SS_ACCOUNT_NUMBER": "your_account_number",
-           "SS_API_KEY": "your_api_key",
-           "SS_REGION": "US"
-         }
-       }
-     }
-   }
-   ```
-
-3. Restart Claude Desktop
-
-## Authentication
-
-The S&S Activewear API uses HTTP Basic Authentication:
-- **Username**: Your Account Number
-- **Password**: Your API Key
-
-The MCP server handles this authentication automatically using the credentials you provide in the configuration.
-
-## Canadian Configuration & Multi-Region Setup
-
-### Important Notes for Canadian Users
-
-- S&S Activewear maintains separate systems for US and Canadian operations
-- You need separate account numbers and API keys for each region
-- Canadian API endpoint: `https://api-ca.ssactivewear.com/V2`
-- To get a Canadian API key, email: `api-ca@ssactivewear.com`
-
-### Setting Up Both US and Canadian Regions
-
-If you operate in both the US and Canada, you can set up two instances of the MCP server in your Claude Desktop configuration. Each instance will use the same codebase but with different credentials and regions.
+Add to your MCP settings file (e.g., `claude_desktop_config.json`):
 
 ```json
 {
   "mcpServers": {
-    "ss-activewear-us": {
+    "ss-activewear-canada": {
       "command": "node",
-      "args": ["/absolute/path/to/ss-activewear-mcp/src/index.js"],
-      "env": {
-        "SS_ACCOUNT_NUMBER": "your_us_account_number",
-        "SS_API_KEY": "your_us_api_key",
-        "SS_REGION": "US"
-      }
-    },
-    "ss-activewear-ca": {
-      "command": "node",
-      "args": ["/absolute/path/to/ss-activewear-mcp/src/index.js"],
-      "env": {
-        "SS_ACCOUNT_NUMBER": "your_canada_account_number",
-        "SS_API_KEY": "your_canada_api_key",
-        "SS_REGION": "CA"
-      }
-    }
-  }
-}
-```
-
-With this setup:
-- Both regions will be available in Claude simultaneously
-- You can search US inventory by prefixing with "using ss-activewear-us"
-- You can search Canadian inventory by prefixing with "using ss-activewear-ca"
-- The same codebase handles both regions automatically based on the `SS_REGION` setting
-
-## Available Tools
-
-### search_products
-Search for products in the S&S Activewear catalog.
-
-**Parameters:**
-- `query` (required): Search keywords
-- `category` (optional): Filter by category
-- `brand` (optional): Filter by brand
-- `limit` (optional): Maximum results (default: 20)
-
-**Example:**
-```
-Search for "gildan t-shirts" in the S&S catalog
-```
-
-### get_product_details
-Get detailed information about a specific product.
-
-**Parameters:**
-- `styleId` (required): The product style ID
-
-**Example:**
-```
-Get details for style G500
-```
-
-### check_inventory
-Check real-time inventory levels.
-
-**Parameters:**
-- `styleIds` (required): Array of style IDs
-- `warehouse` (optional): Specific warehouse code
-
-**Example:**
-```
-Check inventory for styles G500 and G800
-```
-
-### get_pricing
-Get pricing information including volume discounts.
-
-**Parameters:**
-- `styleIds` (required): Array of style IDs
-- `quantity` (optional): Quantity for volume pricing
-
-### download_product_data
-Export product catalog data.
-
-**Parameters:**
-- `format` (optional): csv, xml, or json (default: csv)
-- `includeInventory` (optional): Include inventory data (default: true)
-
-## API Endpoints
-
-- **US API**: `https://api.ssactivewear.com/V2`
-- **Canadian API**: `https://api-ca.ssactivewear.com/V2`
-
-The server automatically uses the correct endpoint based on your `SS_REGION` setting.
-
-### Main Endpoints Used:
-- `Products.aspx` - Product search and details
-- `Inventory.aspx` - Real-time inventory
-- `Categories.aspx` - Product categories
-- `Orders_Post.aspx` - Order submission
-
-## Development
-
-### Running locally
-
-```bash
-npm start
-```
-
-### Testing
-
-```bash
-npm test
-```
-
-## Troubleshooting
-
-### Authentication errors (401)
-- Verify your account number and API key are correct
-- Ensure you're using the correct region (US vs CA)
-- Check that your API access is active
-- The API uses HTTP Basic Authentication - Username is your Account Number, Password is your API Key
-- For Canadian accounts, make sure you're using the Canadian API key from `api-ca@ssactivewear.com`
-- Enable debug mode by setting `DEBUG=true` in your environment variables to see detailed error messages
-
-### Debugging
-
-To enable debug mode and see detailed API calls and responses:
-
-```json
-{
-  "mcpServers": {
-    "ss-activewear": {
-      "command": "node",
-      "args": ["/absolute/path/to/ss-activewear-mcp/src/index.js"],
+      "args": ["/path/to/ss-activewear-mcp/src/index.js"],
       "env": {
         "SS_ACCOUNT_NUMBER": "your_account_number",
         "SS_API_KEY": "your_api_key",
-        "SS_REGION": "CA",
         "DEBUG": "true"
       }
     }
@@ -244,28 +51,102 @@ To enable debug mode and see detailed API calls and responses:
 }
 ```
 
-### No results found
-- Try broader search terms
-- Verify the product style IDs are correct
-- Check if you're searching in the correct region's catalog
-- Note that product availability may differ between US and Canadian catalogs
+## Available Tools
 
-## Contributing
+### 1. `search_products`
+Search the S&S Activewear Canada catalog:
+```javascript
+{
+  "query": "gildan t-shirt",
+  "brand": "Gildan",
+  "limit": 10
+}
+```
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+### 2. `get_product_details`
+Get detailed information for a specific Canadian product:
+```javascript
+{
+  "styleId": "B00760004"
+}
+```
 
-## License
+### 3. `check_inventory`
+Check real-time inventory at Canadian warehouses:
+```javascript
+{
+  "styleIds": ["B00760004", "81480"],
+  "warehouse": "BC"  // Canadian warehouses: BC, ON
+}
+```
 
-MIT License - see [LICENSE](LICENSE) file for details.
+### 4. `get_pricing`
+Get Canadian pricing (CAD) with volume discounts:
+```javascript
+{
+  "styleIds": ["B00760004"],
+  "quantity": 12
+}
+```
+
+### 5. `download_product_data`
+Export Canadian catalog data:
+```javascript
+{
+  "format": "csv",
+  "includeInventory": true
+}
+```
+
+## Canadian Warehouses
+
+This MCP server only works with Canadian S&S Activewear warehouses:
+- **BC** - British Columbia
+- **ON** - Ontario
+
+## Supported Product Identifiers
+
+- **SKU** - Alphanumeric SKU (e.g., B00760004)
+- **Style ID** - Numeric style identifier
+- **GTIN** - Industry standard identifier
+
+## Authentication
+
+Uses HTTP Basic Authentication with:
+- **Username**: Your S&S Activewear account number
+- **Password**: Your S&S Activewear API key
+
+## Debug Mode
+
+Enable debug logging to troubleshoot API issues:
+```env
+DEBUG=true
+```
+
+Debug logs will show:
+- Full API URLs being called
+- Request parameters
+- Response status and content types
+- Error details
+
+## Error Handling
+
+The server provides detailed error messages for common issues:
+- **401**: Authentication failed - check credentials
+- **403**: Access denied - check API permissions  
+- **404**: Product not found in Canadian catalog
+- **HTML Response**: API endpoint or mediatype parameter issue
 
 ## Support
 
-For issues with:
-- This MCP server: [Open an issue](https://github.com/MCERQUA/ss-activewear-mcp/issues)
-- S&S Activewear API: Contact `api@ssactivewear.com` (US) or `api-ca@ssactivewear.com` (Canada)
-- Claude Desktop: Visit [Claude support](https://support.anthropic.com)
+For S&S Activewear Canada API support:
+- **Email**: api-ca@ssactivewear.com
+- **API Base**: https://api-ca.ssactivewear.com/v2
 
-## Acknowledgments
+## License
 
-- Built for use with [Anthropic's MCP](https://github.com/anthropics/mcp)
-- Integrates with [S&S Activewear's API](https://api.ssactivewear.com)
+MIT License - see LICENSE file for details.
+
+---
+
+**Note**: This MCP server is designed exclusively for S&S Activewear Canada operations and does not support US S&S Activewear endpoints.
