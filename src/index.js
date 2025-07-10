@@ -46,6 +46,13 @@ class SSActivewearServer {
       console.error(`Missing required environment variables: ${missing.join(", ")}`);
       console.error("Please check your .env file or MCP configuration.");
     }
+    
+    // Log configuration (without exposing sensitive data)
+    console.error("S&S Activewear MCP Configuration:");
+    console.error(`- Account Number: ${process.env.SS_ACCOUNT_NUMBER ? "✓ Set" : "✗ Missing"}`);
+    console.error(`- API Key: ${process.env.SS_API_KEY ? "✓ Set" : "✗ Missing"}`);
+    console.error(`- Region: ${process.env.SS_REGION || "US (default)"}`);
+    console.error(`- Debug: ${process.env.DEBUG === "true" ? "Enabled" : "Disabled"}`);
   }
 
   setupHandlers() {
@@ -198,32 +205,55 @@ class SSActivewearServer {
     }
 
     const baseUrl = isCanadian ? SS_API_CA_BASE_URL : SS_API_BASE_URL;
+    const fullUrl = `${baseUrl}/${endpoint}`;
+    
+    // Build query parameters including authentication
+    const queryParams = {
+      ...params,
+      AccountNumber: accountNumber,
+      APIKey: apiKey,
+    };
     
     if (process.env.DEBUG === "true") {
-      console.error(`Making API call to: ${baseUrl}/${endpoint}`);
+      console.error(`Making API call to: ${fullUrl}`);
+      console.error(`Query params (excluding credentials): ${JSON.stringify({ ...params })}`);
     }
 
     try {
       const response = await axios({
         method: "GET",
-        url: `${baseUrl}/${endpoint}`,
-        auth: {
-          username: accountNumber,
-          password: apiKey,
-        },
-        params,
+        url: fullUrl,
+        params: queryParams,
         headers: {
           "Accept": "application/json",
+          "Content-Type": "application/json",
           "User-Agent": "SS-Activewear-MCP/1.0",
         },
         timeout: 30000, // 30 second timeout
       });
 
+      if (process.env.DEBUG === "true") {
+        console.error(`Response status: ${response.status}`);
+      }
+
       return response.data;
     } catch (error) {
+      if (process.env.DEBUG === "true") {
+        console.error("API Error Details:");
+        if (error.response) {
+          console.error(`Status: ${error.response.status}`);
+          console.error(`Status Text: ${error.response.statusText}`);
+          console.error(`Response Data: ${JSON.stringify(error.response.data)}`);
+          console.error(`Headers: ${JSON.stringify(error.response.headers)}`);
+        } else {
+          console.error(`Error: ${error.message}`);
+        }
+      }
+      
       if (error.response) {
         // API returned an error response
-        throw new Error(`S&S API Error: ${error.response.status} - ${error.response.statusText}`);
+        const errorMessage = error.response.data?.message || error.response.statusText;
+        throw new Error(`S&S API Error: ${error.response.status} - ${errorMessage}`);
       } else if (error.request) {
         // Request was made but no response
         throw new Error("No response from S&S API. Please check your internet connection.");
@@ -237,14 +267,14 @@ class SSActivewearServer {
   async searchProducts({ query, category, brand, limit = 20 }) {
     try {
       const params = {
-        q: query,
-        limit,
+        SearchTerm: query,
+        RecordCount: limit,
       };
       
-      if (category) params.category = category;
-      if (brand) params.brand = brand;
+      if (category) params.Category = category;
+      if (brand) params.Brand = brand;
 
-      const data = await this.makeApiCall("Products", params);
+      const data = await this.makeApiCall("products/search", params);
       
       // Format the response for better readability
       const formattedData = {
@@ -267,7 +297,7 @@ class SSActivewearServer {
 
   async getProductDetails({ styleId }) {
     try {
-      const data = await this.makeApiCall(`Products/${styleId}`);
+      const data = await this.makeApiCall(`products/${styleId}`);
       
       return {
         content: [
@@ -285,12 +315,12 @@ class SSActivewearServer {
   async checkInventory({ styleIds, warehouse }) {
     try {
       const params = {
-        styleIds: styleIds.join(","),
+        StyleIds: styleIds.join(","),
       };
       
-      if (warehouse) params.warehouse = warehouse;
+      if (warehouse) params.Warehouse = warehouse;
 
-      const data = await this.makeApiCall("Inventory", params);
+      const data = await this.makeApiCall("inventory", params);
       
       return {
         content: [
@@ -308,11 +338,11 @@ class SSActivewearServer {
   async getPricing({ styleIds, quantity = 1 }) {
     try {
       const params = {
-        styleIds: styleIds.join(","),
-        quantity,
+        StyleIds: styleIds.join(","),
+        Quantity: quantity,
       };
 
-      const data = await this.makeApiCall("Pricing", params);
+      const data = await this.makeApiCall("pricing", params);
       
       return {
         content: [
@@ -330,10 +360,10 @@ class SSActivewearServer {
   async downloadProductData({ format = "csv", includeInventory = true }) {
     try {
       // For CSV downloads, S&S typically provides a different endpoint
-      const endpoint = format === "csv" ? "Products/Export" : "Products";
+      const endpoint = format === "csv" ? "products/export" : "products";
       const params = {
-        format,
-        includeInventory,
+        Format: format,
+        IncludeInventory: includeInventory,
       };
 
       const data = await this.makeApiCall(endpoint, params);
