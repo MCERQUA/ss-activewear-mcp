@@ -16,9 +16,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 dotenv.config({ path: join(__dirname, "..", ".env") });
 
-// S&S Activewear API configuration
-const SS_API_BASE_URL = "https://api.ssactivewear.com/v2";
-const SS_API_CA_BASE_URL = "https://api-ca.ssactivewear.com/v2";
+// S&S Activewear API configuration - Using Canadian endpoint as primary
+const SS_API_BASE_URL = "https://api-ca.ssactivewear.com/v2";
 
 class SSActivewearServer {
   constructor() {
@@ -51,8 +50,8 @@ class SSActivewearServer {
     console.error("S&S Activewear MCP Configuration:");
     console.error(`- Account Number: ${process.env.SS_ACCOUNT_NUMBER ? "✓ Set" : "✗ Missing"}`);
     console.error(`- API Key: ${process.env.SS_API_KEY ? "✓ Set" : "✗ Missing"}`);
-    console.error(`- Region: ${process.env.SS_REGION || "US (default)"}`);
     console.error(`- Debug: ${process.env.DEBUG === "true" ? "Enabled" : "Disabled"}`);
+    console.error(`- API Base URL: ${SS_API_BASE_URL}`);
   }
 
   setupHandlers() {
@@ -94,7 +93,7 @@ class SSActivewearServer {
             properties: {
               styleId: {
                 type: "string",
-                description: "The style ID, SKU, or product identifier",
+                description: "The style ID of the product",
               },
             },
             required: ["styleId"],
@@ -109,11 +108,11 @@ class SSActivewearServer {
               styleIds: {
                 type: "array",
                 items: { type: "string" },
-                description: "Array of style IDs, SKUs, or product identifiers to check inventory for",
+                description: "Array of style IDs to check inventory for",
               },
               warehouse: {
                 type: "string",
-                description: "Specific warehouse code (optional): IL, NV, NJ, KS, BC, ON",
+                description: "Specific warehouse code (optional)",
               },
             },
             required: ["styleIds"],
@@ -128,7 +127,7 @@ class SSActivewearServer {
               styleIds: {
                 type: "array",
                 items: { type: "string" },
-                description: "Array of style IDs, SKUs, or product identifiers to get pricing for",
+                description: "Array of style IDs to get pricing for",
               },
               quantity: {
                 type: "number",
@@ -198,18 +197,15 @@ class SSActivewearServer {
   async makeApiCall(endpoint, params = {}) {
     const accountNumber = process.env.SS_ACCOUNT_NUMBER;
     const apiKey = process.env.SS_API_KEY;
-    const isCanadian = process.env.SS_REGION === "CA";
 
     if (!accountNumber || !apiKey) {
       throw new Error("S&S Activewear credentials not configured. Please check your .env file.");
     }
 
-    const baseUrl = isCanadian ? SS_API_CA_BASE_URL : SS_API_BASE_URL;
+    // Construct the full URL with endpoint - ensure no double slashes
+    const fullUrl = `${SS_API_BASE_URL}/${endpoint.replace(/^\//, "")}`;
     
-    // Construct the full URL with endpoint
-    const fullUrl = `${baseUrl}/${endpoint}`;
-    
-    // CRITICAL FIX: Always add mediatype=json to get JSON responses instead of HTML
+    // CRITICAL: Always add mediatype=json to get JSON responses instead of HTML
     const queryParams = {
       ...params,
       mediatype: "json"
@@ -241,6 +237,12 @@ class SSActivewearServer {
       if (process.env.DEBUG === "true") {
         console.error(`Response status: ${response.status}`);
         console.error(`Response type: ${typeof response.data}`);
+        console.error(`Response content type: ${response.headers['content-type']}`);
+      }
+
+      // Check if we got HTML instead of JSON (common issue)
+      if (typeof response.data === 'string' && response.data.includes('<html>')) {
+        throw new Error("Received HTML response instead of JSON. Check API endpoint and mediatype parameter.");
       }
 
       return response.data;
@@ -250,22 +252,30 @@ class SSActivewearServer {
         if (error.response) {
           console.error(`Status: ${error.response.status}`);
           console.error(`Status Text: ${error.response.statusText}`);
-          console.error(`Response Data: ${JSON.stringify(error.response.data)}`);
-          console.error(`Headers: ${JSON.stringify(error.response.headers)}`);
+          console.error(`Response Headers: ${JSON.stringify(error.response.headers)}`);
+          console.error(`Response Data (first 500 chars): ${JSON.stringify(error.response.data).substring(0, 500)}`);
         } else {
           console.error(`Error: ${error.message}`);
         }
       }
       
       if (error.response) {
-        // API returned an error response
-        const errorMessage = error.response.data?.message || error.response.statusText;
-        throw new Error(`S&S API Error: ${error.response.status} - ${errorMessage}`);
+        // Handle specific error responses
+        if (error.response.status === 404) {
+          throw new Error("Product not found or discontinued.");
+        } else if (error.response.status === 401) {
+          throw new Error("Authentication failed. Check your account number and API key.");
+        } else if (error.response.status === 403) {
+          throw new Error("Access denied. Check your API permissions.");
+        } else {
+          const errorMessage = error.response.data?.errors?.[0]?.message 
+            || error.response.data?.message 
+            || error.response.statusText;
+          throw new Error(`S&S API Error: ${error.response.status} - ${errorMessage}`);
+        }
       } else if (error.request) {
-        // Request was made but no response
         throw new Error("No response from S&S API. Please check your internet connection.");
       } else {
-        // Something else went wrong
         throw error;
       }
     }
@@ -273,18 +283,14 @@ class SSActivewearServer {
 
   async searchProducts({ query, category, brand, limit = 20 }) {
     try {
-      // Use the products endpoint with style search parameter
+      // Use the correct API endpoint: /v2/products/?style={query}
       const params = {};
       
-      // Search by style parameter - this searches across style names, brands, etc.
       if (query) {
         params.style = query;
       }
       
-      // Note: S&S API doesn't have direct category/brand filters in the products endpoint
-      // These would typically be filtered client-side or use different endpoints
-      
-      const data = await this.makeApiCall("products", params);
+      const data = await this.makeApiCall("products/", params);
       
       // Filter results client-side if brand specified
       let filteredData = Array.isArray(data) ? data : [];
@@ -292,6 +298,12 @@ class SSActivewearServer {
       if (brand && filteredData.length > 0) {
         filteredData = filteredData.filter(product => 
           product.brandName && product.brandName.toLowerCase().includes(brand.toLowerCase())
+        );
+      }
+      
+      if (category && filteredData.length > 0) {
+        filteredData = filteredData.filter(product => 
+          product.categoryName && product.categoryName.toLowerCase().includes(category.toLowerCase())
         );
       }
       
@@ -306,6 +318,9 @@ class SSActivewearServer {
             type: "text",
             text: JSON.stringify({
               totalResults: filteredData.length,
+              query: query,
+              brand: brand || null,
+              category: category || null,
               products: filteredData
             }, null, 2),
           },
@@ -318,8 +333,7 @@ class SSActivewearServer {
 
   async getProductDetails({ styleId }) {
     try {
-      // Use the products endpoint with specific product identifier
-      // The API accepts various identifiers: SKU, GTIN, StyleID, etc.
+      // Use the correct API endpoint: /v2/products/{styleId}
       const endpoint = `products/${styleId}`;
       
       const data = await this.makeApiCall(endpoint);
@@ -339,7 +353,7 @@ class SSActivewearServer {
 
   async checkInventory({ styleIds, warehouse }) {
     try {
-      // Use the inventory endpoint with comma-separated style IDs
+      // Use the correct API endpoint: /v2/inventory/{styleIds}
       const endpoint = `inventory/${styleIds.join(",")}`;
       const params = {};
       
@@ -364,7 +378,7 @@ class SSActivewearServer {
 
   async getPricing({ styleIds, quantity = 1 }) {
     try {
-      // Use the products endpoint to get pricing info
+      // Use the products endpoint with specific fields for pricing
       const endpoint = `products/${styleIds.join(",")}`;
       const params = {
         fields: "sku,brandName,styleName,mapPrice,piecePrice,dozenPrice,casePrice,customerPrice"
@@ -389,7 +403,10 @@ class SSActivewearServer {
         content: [
           {
             type: "text",
-            text: JSON.stringify(pricingData, null, 2),
+            text: JSON.stringify({
+              requestedQuantity: quantity,
+              pricingData: pricingData
+            }, null, 2),
           },
         ],
       };
@@ -400,10 +417,14 @@ class SSActivewearServer {
 
   async downloadProductData({ format = "csv", includeInventory = true }) {
     try {
-      // For product data export, get all products
-      // Note: S&S API may limit the number of products returned in a single call
-      const endpoint = includeInventory ? "products" : "products";
+      // For product data export, get all products from the correct endpoint
+      const endpoint = "products/";
       const params = {};
+      
+      // Add fields parameter if we want to limit data
+      if (!includeInventory) {
+        params.fields = "sku,brandName,styleName,colorName,sizeName,mapPrice,piecePrice";
+      }
       
       const data = await this.makeApiCall(endpoint, params);
       
@@ -439,21 +460,45 @@ class SSActivewearServer {
       return "No data available";
     }
     
-    const headers = Object.keys(data[0]);
+    // Flatten nested objects for CSV export
+    const flattenedData = data.map(item => {
+      const flattened = {};
+      
+      Object.keys(item).forEach(key => {
+        if (Array.isArray(item[key])) {
+          // Handle arrays (like warehouses) by joining or creating separate columns
+          if (key === 'warehouses' && item[key].length > 0) {
+            const warehouse = item[key][0]; // Take first warehouse for main columns
+            flattened[`${key}_qty`] = warehouse.qty || 0;
+            flattened[`${key}_warehouse`] = warehouse.warehouseAbbr || '';
+            flattened[`${key}_closeout`] = warehouse.closeout || false;
+          } else {
+            flattened[key] = JSON.stringify(item[key]);
+          }
+        } else if (typeof item[key] === 'object' && item[key] !== null) {
+          // Flatten nested objects
+          Object.keys(item[key]).forEach(subKey => {
+            flattened[`${key}_${subKey}`] = item[key][subKey];
+          });
+        } else {
+          flattened[key] = item[key];
+        }
+      });
+      
+      return flattened;
+    });
+    
+    const headers = Object.keys(flattenedData[0]);
     const csvHeaders = headers.join(",");
     
-    const csvRows = data.map(row => {
+    const csvRows = flattenedData.map(row => {
       return headers.map(header => {
         const value = row[header];
-        // Handle nested objects (like warehouses array)
-        if (typeof value === 'object' && value !== null) {
-          return `"${JSON.stringify(value).replace(/"/g, '""')}"`;
-        }
         // Escape quotes and wrap in quotes if contains comma
-        if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
+        if (typeof value === 'string' && (value.includes(',') || value.includes('"') || value.includes('\n'))) {
           return `"${value.replace(/"/g, '""')}"`;
         }
-        return value;
+        return value !== null && value !== undefined ? value : '';
       }).join(",");
     });
     
