@@ -205,26 +205,30 @@ class SSActivewearServer {
     }
 
     const baseUrl = isCanadian ? SS_API_CA_BASE_URL : SS_API_BASE_URL;
+    
+    // Fix endpoint formatting - ensure it has .aspx extension
+    if (!endpoint.endsWith('.aspx')) {
+      endpoint = endpoint.replace(/\//g, '_') + '.aspx';
+    }
+    
     const fullUrl = `${baseUrl}/${endpoint}`;
     
-    // Build query parameters including authentication
-    const queryParams = {
-      ...params,
-      AccountNumber: accountNumber,
-      APIKey: apiKey,
-    };
+    // Create Basic Auth header
+    const authString = Buffer.from(`${accountNumber}:${apiKey}`).toString('base64');
     
     if (process.env.DEBUG === "true") {
       console.error(`Making API call to: ${fullUrl}`);
-      console.error(`Query params (excluding credentials): ${JSON.stringify({ ...params })}`);
+      console.error(`Query params: ${JSON.stringify(params)}`);
+      console.error(`Using Basic Auth with account: ${accountNumber}`);
     }
 
     try {
       const response = await axios({
         method: "GET",
         url: fullUrl,
-        params: queryParams,
+        params: params,
         headers: {
+          "Authorization": `Basic ${authString}`,
           "Accept": "application/json",
           "Content-Type": "application/json",
           "User-Agent": "SS-Activewear-MCP/1.0",
@@ -266,20 +270,21 @@ class SSActivewearServer {
 
   async searchProducts({ query, category, brand, limit = 20 }) {
     try {
+      // Use the Products endpoint with search parameters
       const params = {
-        SearchTerm: query,
-        RecordCount: limit,
+        searchterm: query,
+        recordcount: limit,
       };
       
-      if (category) params.Category = category;
-      if (brand) params.Brand = brand;
+      if (category) params.category = category;
+      if (brand) params.brand = brand;
 
-      const data = await this.makeApiCall("products/search", params);
+      const data = await this.makeApiCall("Products", params);
       
       // Format the response for better readability
       const formattedData = {
-        totalResults: data.totalResults || data.length,
-        products: data.products || data,
+        totalResults: data.length || 0,
+        products: data || [],
       };
       
       return {
@@ -297,13 +302,21 @@ class SSActivewearServer {
 
   async getProductDetails({ styleId }) {
     try {
-      const data = await this.makeApiCall(`products/${styleId}`);
+      // Use the Products endpoint with specific style filter
+      const params = {
+        style: styleId,
+      };
+      
+      const data = await this.makeApiCall("Products", params);
+      
+      // Return the first product if found
+      const product = Array.isArray(data) && data.length > 0 ? data[0] : null;
       
       return {
         content: [
           {
             type: "text",
-            text: JSON.stringify(data, null, 2),
+            text: JSON.stringify(product || { error: "Product not found" }, null, 2),
           },
         ],
       };
@@ -314,13 +327,14 @@ class SSActivewearServer {
 
   async checkInventory({ styleIds, warehouse }) {
     try {
+      // Use the Inventory endpoint
       const params = {
-        StyleIds: styleIds.join(","),
+        style: styleIds.join(","),
       };
       
-      if (warehouse) params.Warehouse = warehouse;
+      if (warehouse) params.warehouse = warehouse;
 
-      const data = await this.makeApiCall("inventory", params);
+      const data = await this.makeApiCall("Inventory", params);
       
       return {
         content: [
@@ -337,18 +351,27 @@ class SSActivewearServer {
 
   async getPricing({ styleIds, quantity = 1 }) {
     try {
+      // Use the Products endpoint to get pricing info
       const params = {
-        StyleIds: styleIds.join(","),
-        Quantity: quantity,
+        style: styleIds.join(","),
       };
 
-      const data = await this.makeApiCall("pricing", params);
+      const data = await this.makeApiCall("Products", params);
+      
+      // Extract pricing information
+      const pricingData = Array.isArray(data) ? data.map(product => ({
+        style: product.style,
+        title: product.title,
+        basePrice: product.price,
+        quantity: quantity,
+        // Add volume pricing calculation if available
+      })) : [];
       
       return {
         content: [
           {
             type: "text",
-            text: JSON.stringify(data, null, 2),
+            text: JSON.stringify(pricingData, null, 2),
           },
         ],
       };
@@ -359,14 +382,24 @@ class SSActivewearServer {
 
   async downloadProductData({ format = "csv", includeInventory = true }) {
     try {
-      // For CSV downloads, S&S typically provides a different endpoint
-      const endpoint = format === "csv" ? "products/export" : "products";
-      const params = {
-        Format: format,
-        IncludeInventory: includeInventory,
-      };
-
-      const data = await this.makeApiCall(endpoint, params);
+      // For product data export, use the Products endpoint
+      const params = {};
+      
+      // Get all products (or implement pagination if needed)
+      const data = await this.makeApiCall("Products", params);
+      
+      // If CSV format requested, convert data
+      if (format === "csv" && Array.isArray(data)) {
+        const csvData = this.convertToCSV(data);
+        return {
+          content: [
+            {
+              type: "text",
+              text: csvData,
+            },
+          ],
+        };
+      }
       
       return {
         content: [
@@ -379,6 +412,29 @@ class SSActivewearServer {
     } catch (error) {
       throw new Error(`Failed to download product data: ${error.message}`);
     }
+  }
+  
+  // Helper function to convert JSON to CSV
+  convertToCSV(data) {
+    if (!Array.isArray(data) || data.length === 0) {
+      return "No data available";
+    }
+    
+    const headers = Object.keys(data[0]);
+    const csvHeaders = headers.join(",");
+    
+    const csvRows = data.map(row => {
+      return headers.map(header => {
+        const value = row[header];
+        // Escape quotes and wrap in quotes if contains comma
+        if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
+          return `"${value.replace(/"/g, '""')}"`;
+        }
+        return value;
+      }).join(",");
+    });
+    
+    return [csvHeaders, ...csvRows].join("\n");
   }
 
   async run() {
