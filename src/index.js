@@ -17,8 +17,8 @@ const __dirname = dirname(__filename);
 dotenv.config({ path: join(__dirname, "..", ".env") });
 
 // S&S Activewear API configuration
-const SS_API_BASE_URL = "https://api.ssactivewear.com/V2";
-const SS_API_CA_BASE_URL = "https://api-ca.ssactivewear.com/V2";
+const SS_API_BASE_URL = "https://api.ssactivewear.com/v2";
+const SS_API_CA_BASE_URL = "https://api-ca.ssactivewear.com/v2";
 
 class SSActivewearServer {
   constructor() {
@@ -94,7 +94,7 @@ class SSActivewearServer {
             properties: {
               styleId: {
                 type: "string",
-                description: "The style ID of the product",
+                description: "The style ID, SKU, or product identifier",
               },
             },
             required: ["styleId"],
@@ -109,11 +109,11 @@ class SSActivewearServer {
               styleIds: {
                 type: "array",
                 items: { type: "string" },
-                description: "Array of style IDs to check inventory for",
+                description: "Array of style IDs, SKUs, or product identifiers to check inventory for",
               },
               warehouse: {
                 type: "string",
-                description: "Specific warehouse code (optional)",
+                description: "Specific warehouse code (optional): IL, NV, NJ, KS, BC, ON",
               },
             },
             required: ["styleIds"],
@@ -128,7 +128,7 @@ class SSActivewearServer {
               styleIds: {
                 type: "array",
                 items: { type: "string" },
-                description: "Array of style IDs to get pricing for",
+                description: "Array of style IDs, SKUs, or product identifiers to get pricing for",
               },
               quantity: {
                 type: "number",
@@ -206,19 +206,21 @@ class SSActivewearServer {
 
     const baseUrl = isCanadian ? SS_API_CA_BASE_URL : SS_API_BASE_URL;
     
-    // Fix endpoint formatting - ensure it has .aspx extension
-    if (!endpoint.endsWith('.aspx')) {
-      endpoint = endpoint.replace(/\//g, '_') + '.aspx';
-    }
-    
+    // Construct the full URL with endpoint
     const fullUrl = `${baseUrl}/${endpoint}`;
+    
+    // CRITICAL FIX: Always add mediatype=json to get JSON responses instead of HTML
+    const queryParams = {
+      ...params,
+      mediatype: "json"
+    };
     
     // Create Basic Auth header
     const authString = Buffer.from(`${accountNumber}:${apiKey}`).toString('base64');
     
     if (process.env.DEBUG === "true") {
       console.error(`Making API call to: ${fullUrl}`);
-      console.error(`Query params: ${JSON.stringify(params)}`);
+      console.error(`Query params: ${JSON.stringify(queryParams)}`);
       console.error(`Using Basic Auth with account: ${accountNumber}`);
     }
 
@@ -226,7 +228,7 @@ class SSActivewearServer {
       const response = await axios({
         method: "GET",
         url: fullUrl,
-        params: params,
+        params: queryParams,
         headers: {
           "Authorization": `Basic ${authString}`,
           "Accept": "application/json",
@@ -238,6 +240,7 @@ class SSActivewearServer {
 
       if (process.env.DEBUG === "true") {
         console.error(`Response status: ${response.status}`);
+        console.error(`Response type: ${typeof response.data}`);
       }
 
       return response.data;
@@ -270,28 +273,41 @@ class SSActivewearServer {
 
   async searchProducts({ query, category, brand, limit = 20 }) {
     try {
-      // Use the Products endpoint with search parameters
-      const params = {
-        searchterm: query,
-        recordcount: limit,
-      };
+      // Use the products endpoint with style search parameter
+      const params = {};
       
-      if (category) params.category = category;
-      if (brand) params.brand = brand;
-
-      const data = await this.makeApiCall("Products", params);
+      // Search by style parameter - this searches across style names, brands, etc.
+      if (query) {
+        params.style = query;
+      }
       
-      // Format the response for better readability
-      const formattedData = {
-        totalResults: data.length || 0,
-        products: data || [],
-      };
+      // Note: S&S API doesn't have direct category/brand filters in the products endpoint
+      // These would typically be filtered client-side or use different endpoints
+      
+      const data = await this.makeApiCall("products", params);
+      
+      // Filter results client-side if brand specified
+      let filteredData = Array.isArray(data) ? data : [];
+      
+      if (brand && filteredData.length > 0) {
+        filteredData = filteredData.filter(product => 
+          product.brandName && product.brandName.toLowerCase().includes(brand.toLowerCase())
+        );
+      }
+      
+      // Apply limit
+      if (limit && filteredData.length > limit) {
+        filteredData = filteredData.slice(0, limit);
+      }
       
       return {
         content: [
           {
             type: "text",
-            text: JSON.stringify(formattedData, null, 2),
+            text: JSON.stringify({
+              totalResults: filteredData.length,
+              products: filteredData
+            }, null, 2),
           },
         ],
       };
@@ -302,21 +318,17 @@ class SSActivewearServer {
 
   async getProductDetails({ styleId }) {
     try {
-      // Use the Products endpoint with specific style filter
-      const params = {
-        style: styleId,
-      };
+      // Use the products endpoint with specific product identifier
+      // The API accepts various identifiers: SKU, GTIN, StyleID, etc.
+      const endpoint = `products/${styleId}`;
       
-      const data = await this.makeApiCall("Products", params);
-      
-      // Return the first product if found
-      const product = Array.isArray(data) && data.length > 0 ? data[0] : null;
+      const data = await this.makeApiCall(endpoint);
       
       return {
         content: [
           {
             type: "text",
-            text: JSON.stringify(product || { error: "Product not found" }, null, 2),
+            text: JSON.stringify(data || { error: "Product not found" }, null, 2),
           },
         ],
       };
@@ -327,14 +339,15 @@ class SSActivewearServer {
 
   async checkInventory({ styleIds, warehouse }) {
     try {
-      // Use the Inventory endpoint
-      const params = {
-        style: styleIds.join(","),
-      };
+      // Use the inventory endpoint with comma-separated style IDs
+      const endpoint = `inventory/${styleIds.join(",")}`;
+      const params = {};
       
-      if (warehouse) params.warehouse = warehouse;
+      if (warehouse) {
+        params.Warehouses = warehouse;
+      }
 
-      const data = await this.makeApiCall("Inventory", params);
+      const data = await this.makeApiCall(endpoint, params);
       
       return {
         content: [
@@ -351,21 +364,26 @@ class SSActivewearServer {
 
   async getPricing({ styleIds, quantity = 1 }) {
     try {
-      // Use the Products endpoint to get pricing info
+      // Use the products endpoint to get pricing info
+      const endpoint = `products/${styleIds.join(",")}`;
       const params = {
-        style: styleIds.join(","),
+        fields: "sku,brandName,styleName,mapPrice,piecePrice,dozenPrice,casePrice,customerPrice"
       };
 
-      const data = await this.makeApiCall("Products", params);
+      const data = await this.makeApiCall(endpoint, params);
       
-      // Extract pricing information
+      // Extract and format pricing information
       const pricingData = Array.isArray(data) ? data.map(product => ({
-        style: product.style,
-        title: product.title,
-        basePrice: product.price,
+        sku: product.sku,
+        brandName: product.brandName,
+        styleName: product.styleName,
+        mapPrice: product.mapPrice,
+        piecePrice: product.piecePrice,
+        dozenPrice: product.dozenPrice,
+        casePrice: product.casePrice,
+        customerPrice: product.customerPrice,
         quantity: quantity,
-        // Add volume pricing calculation if available
-      })) : [];
+      })) : (data ? [data] : []);
       
       return {
         content: [
@@ -382,11 +400,12 @@ class SSActivewearServer {
 
   async downloadProductData({ format = "csv", includeInventory = true }) {
     try {
-      // For product data export, use the Products endpoint
+      // For product data export, get all products
+      // Note: S&S API may limit the number of products returned in a single call
+      const endpoint = includeInventory ? "products" : "products";
       const params = {};
       
-      // Get all products (or implement pagination if needed)
-      const data = await this.makeApiCall("Products", params);
+      const data = await this.makeApiCall(endpoint, params);
       
       // If CSV format requested, convert data
       if (format === "csv" && Array.isArray(data)) {
@@ -426,6 +445,10 @@ class SSActivewearServer {
     const csvRows = data.map(row => {
       return headers.map(header => {
         const value = row[header];
+        // Handle nested objects (like warehouses array)
+        if (typeof value === 'object' && value !== null) {
+          return `"${JSON.stringify(value).replace(/"/g, '""')}"`;
+        }
         // Escape quotes and wrap in quotes if contains comma
         if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
           return `"${value.replace(/"/g, '""')}"`;
