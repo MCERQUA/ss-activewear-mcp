@@ -53,6 +53,8 @@ To get your S&S Activewear API key:
 
 ## Usage with Claude Desktop
 
+### Single Region Setup
+
 1. Open your Claude Desktop configuration file:
    - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
    - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
@@ -77,6 +79,50 @@ To get your S&S Activewear API key:
    ```
 
 3. Restart Claude Desktop
+
+## Canadian Configuration & Multi-Region Setup
+
+### Important Notes for Canadian Users
+
+- S&S Activewear maintains separate systems for US and Canadian operations
+- You need separate account numbers and API keys for each region
+- Canadian API endpoint: `https://api-ca.ssactivewear.com/V2`
+- To get a Canadian API key, email: `api-ca@ssactivewear.com`
+
+### Setting Up Both US and Canadian Regions
+
+If you operate in both the US and Canada, you can set up two instances of the MCP server in your Claude Desktop configuration. Each instance will use the same codebase but with different credentials and regions.
+
+```json
+{
+  "mcpServers": {
+    "ss-activewear-us": {
+      "command": "node",
+      "args": ["/absolute/path/to/ss-activewear-mcp/src/index.js"],
+      "env": {
+        "SS_ACCOUNT_NUMBER": "your_us_account_number",
+        "SS_API_KEY": "your_us_api_key",
+        "SS_REGION": "US"
+      }
+    },
+    "ss-activewear-ca": {
+      "command": "node",
+      "args": ["/absolute/path/to/ss-activewear-mcp/src/index.js"],
+      "env": {
+        "SS_ACCOUNT_NUMBER": "your_canada_account_number",
+        "SS_API_KEY": "your_canada_api_key",
+        "SS_REGION": "CA"
+      }
+    }
+  }
+}
+```
+
+With this setup:
+- Both regions will be available in Claude simultaneously
+- You can search US inventory by prefixing with "using ss-activewear-us"
+- You can search Canadian inventory by prefixing with "using ss-activewear-ca"
+- The same codebase handles both regions automatically based on the `SS_REGION` setting
 
 ## Available Tools
 
@@ -158,11 +204,13 @@ npm test
 - Verify your account number and API key are correct
 - Ensure you're using the correct region (US vs CA)
 - Check that your API access is active
+- For Canadian accounts, make sure you're using the Canadian API key from `api-ca@ssactivewear.com`
 
 ### No results found
 - Try broader search terms
 - Verify the product style IDs are correct
 - Check if you're searching in the correct region's catalog
+- Note that product availability may differ between US and Canadian catalogs
 
 ## Contributing
 
@@ -176,7 +224,7 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 For issues with:
 - This MCP server: [Open an issue](https://github.com/MCERQUA/ss-activewear-mcp/issues)
-- S&S Activewear API: Contact `api@ssactivewear.com`
+- S&S Activewear API: Contact `api@ssactivewear.com` (US) or `api-ca@ssactivewear.com` (Canada)
 - Claude Desktop: Visit [Claude support](https://support.anthropic.com)
 
 ## Acknowledgments
