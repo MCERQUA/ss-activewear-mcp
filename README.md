@@ -49,6 +49,7 @@ To get your S&S Activewear API key:
    SS_ACCOUNT_NUMBER=your_account_number
    SS_API_KEY=your_api_key
    SS_REGION=US  # or CA for Canada
+   DEBUG=false   # set to true for debugging
    ```
 
 ## Usage with Claude Desktop
@@ -205,6 +206,28 @@ npm test
 - Ensure you're using the correct region (US vs CA)
 - Check that your API access is active
 - For Canadian accounts, make sure you're using the Canadian API key from `api-ca@ssactivewear.com`
+- Enable debug mode by setting `DEBUG=true` in your environment variables to see detailed error messages
+
+### Debugging
+
+To enable debug mode and see detailed API calls and responses:
+
+```json
+{
+  "mcpServers": {
+    "ss-activewear": {
+      "command": "node",
+      "args": ["/absolute/path/to/ss-activewear-mcp/src/index.js"],
+      "env": {
+        "SS_ACCOUNT_NUMBER": "your_account_number",
+        "SS_API_KEY": "your_api_key",
+        "SS_REGION": "CA",
+        "DEBUG": "true"
+      }
+    }
+  }
+}
+```
 
 ### No results found
 - Try broader search terms
